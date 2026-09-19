@@ -33,6 +33,9 @@ const (
 	DefaultMaxIdleConnsPerHost = 250
 	// DefaultTimeout is the default value to use for the ServiceConfig.Timeout param
 	DefaultTimeout = 2 * time.Second
+	// DefaultCircuitBreakerTimeout is the default value to use for the
+	// CircuitBreaker.Timeout param
+	DefaultCircuitBreakerTimeout = 60 * time.Second
 
 	// ConfigVersion is the current version of the config struct
 	ConfigVersion = 3
@@ -279,6 +282,8 @@ type Backend struct {
 	SD string `mapstructure:"sd"`
 	// scheme to use for servers fetched from
 	SDScheme string `mapstructure:"sd_scheme"`
+	// CircuitBreaker defines the circuit breaker configuration for the backend
+	CircuitBreaker CircuitBreaker `mapstructure:"circuit_breaker"`
 
 	// list of keys to be replaced in the URLPattern
 	URLKeys []string
@@ -303,6 +308,22 @@ type Backend struct {
 	// so logs and other instrumentation can output better info (thus, it is not loaded
 	// with `mapstructure` or `json` tags).
 	ParentEndpointMethod string `json:"-" mapstructure:"-"`
+}
+
+// CircuitBreaker defines the configuration of the circuit breaker middleware
+// protecting a backend. The breaker is disabled when MaxErrors is not positive
+type CircuitBreaker struct {
+	// Name identifies the circuit breaker, so logs can reference it. If empty,
+	// the backend URL pattern is used
+	Name string `mapstructure:"name"`
+	// MaxErrors is the number of consecutive errors required to open the circuit
+	MaxErrors int `mapstructure:"max_errors"`
+	// Timeout is the duration the circuit stays open before switching to the
+	// half-open state, where a limited amount of requests is let through
+	Timeout time.Duration `mapstructure:"timeout"`
+	// MaxConcurrentRequests is the maximum number of in-flight requests allowed
+	// while the circuit is half-open
+	MaxConcurrentRequests int `mapstructure:"max_concurrent_requests"`
 }
 
 // Plugin contains the config required by the plugin module
@@ -623,6 +644,17 @@ func (s *ServiceConfig) initBackendDefaults(e, b int) error {
 	}
 	if backend.SDScheme == "" {
 		backend.SDScheme = "http"
+	}
+	if backend.CircuitBreaker.MaxErrors > 0 {
+		if backend.CircuitBreaker.Timeout == 0 {
+			backend.CircuitBreaker.Timeout = DefaultCircuitBreakerTimeout
+		}
+		if backend.CircuitBreaker.MaxConcurrentRequests <= 0 {
+			backend.CircuitBreaker.MaxConcurrentRequests = 1
+		}
+		if backend.CircuitBreaker.Name == "" {
+			backend.CircuitBreaker.Name = backend.URLPattern
+		}
 	}
 	return nil
 }
