@@ -303,6 +303,32 @@ type Backend struct {
 	// so logs and other instrumentation can output better info (thus, it is not loaded
 	// with `mapstructure` or `json` tags).
 	ParentEndpointMethod string `json:"-" mapstructure:"-"`
+
+	// CircuitBreaker defines the circuit breaker configuration for this backend
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+}
+
+// CircuitBreakerConfig defines the behaviour of the circuit breaker middleware
+// protecting a backend. The breaker starts in the closed state, opens after
+// MaxErrors consecutive errors and, once the Timeout has elapsed, moves to the
+// half-open state so a limited number of trial requests can verify if the
+// backend has recovered
+type CircuitBreakerConfig struct {
+	// Disabled allows to explicitly turn the circuit breaker off
+	Disabled bool `mapstructure:"disabled"`
+	// MaxErrors is the number of consecutive errors tolerated before the
+	// circuit is opened. If zero, a default value is used
+	MaxErrors int `mapstructure:"max_errors"`
+	// Timeout is the time the circuit stays fully open before moving to the
+	// half-open state. If zero, a default value is used
+	Timeout time.Duration `mapstructure:"timeout"`
+	// Interval is the polling interval used to watch the subscriber host set
+	// for backends going down or recovering. If zero, a default value is used
+	Interval time.Duration `mapstructure:"interval"`
+	// MaxConcurrentRequests is the maximum number of in-flight requests
+	// allowed while the circuit is in the half-open state. If zero, a default
+	// value is used
+	MaxConcurrentRequests int `mapstructure:"max_concurrent_requests"`
 }
 
 // Plugin contains the config required by the plugin module

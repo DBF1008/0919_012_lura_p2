@@ -92,7 +92,11 @@ func (pf defaultFactory) newStack(backend *config.Backend) (p Proxy) {
 	p = NewBackendPluginMiddleware(pf.logger, backend)(p)
 	p = NewGraphQLMiddleware(pf.logger, backend)(p)
 	p = NewFilterHeadersMiddleware(pf.logger, backend)(p)
-	p = NewLoadBalancedMiddlewareWithSubscriberAndLogger(pf.logger, pf.subscriberFactory(backend))(p)
+	subscriber := pf.subscriberFactory(backend)
+	p = NewLoadBalancedMiddlewareWithSubscriberAndLogger(pf.logger, subscriber)(p)
+	// the circuit breaker must wrap the load balancing middleware so the
+	// circuit check happens before a host is selected and the request is sent
+	p = NewCircuitBreakerMiddleware(pf.logger, backend, subscriber)(p)
 	if backend.ConcurrentCalls > 1 {
 		p = NewConcurrentMiddlewareWithLogger(pf.logger, backend)(p)
 	}
